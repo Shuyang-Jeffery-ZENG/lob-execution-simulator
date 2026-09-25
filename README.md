@@ -1,5 +1,7 @@
 # LOB execution simulator
 
+[![Tests](https://github.com/Shuyang-Jeffery-ZENG/lob-execution-simulator/actions/workflows/tests.yml/badge.svg?branch=main)](https://github.com/Shuyang-Jeffery-ZENG/lob-execution-simulator/actions/workflows/tests.yml)
+
 A synthetic limit-order-book execution simulator for a single parent order. It
 separates market state, received market data, and received order reports, with
 fixed latencies and explicit cost and completion accounting.

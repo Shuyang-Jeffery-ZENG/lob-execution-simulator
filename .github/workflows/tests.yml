@@ -1,0 +1,81 @@
+name: Tests
+
+"on":
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  tests:
+    name: Python ${{ matrix.python-version }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.12", "3.14"]
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: ${{ matrix.python-version }}
+      - name: Create virtual environment
+        run: python -m venv "$RUNNER_TEMP/lob-venv"
+      - name: Build and install wheel
+        run: |
+          set -euo pipefail
+          SIM_PY="$RUNNER_TEMP/lob-venv/bin/python"
+          "$SIM_PY" --version
+          "$SIM_PY" -m pip install --no-cache-dir -r requirements-dev.txt
+          test ! -e dist
+          mkdir dist
+          "$SIM_PY" -m pip wheel --no-cache-dir --no-deps --wheel-dir dist .
+          shopt -s nullglob
+          wheels=(dist/*.whl)
+          if [[ ${#wheels[@]} -ne 1 ]]; then
+            echo "Expected exactly one wheel, found ${#wheels[@]}" >&2
+            exit 1
+          fi
+          "$SIM_PY" -m pip install --no-cache-dir --no-deps "${wheels[0]}"
+      - name: Run full tests outside checkout
+        run: |
+          set -euo pipefail
+          SIM_PY="$RUNNER_TEMP/lob-venv/bin/python"
+          SIM_RUN_DIR="$(mktemp -d "$RUNNER_TEMP/lob-tests.XXXXXX")"
+          cd "$SIM_RUN_DIR"
+          case "$PWD/" in
+            "$GITHUB_WORKSPACE/"*) echo "Test directory must be outside checkout" >&2; exit 1 ;;
+          esac
+          printf 'Test working directory: %s\n' "$PWD"
+          "$SIM_PY" -I -m pytest --import-mode=importlib -q \
+            "$GITHUB_WORKSPACE/tests" \
+            --basetemp="$SIM_RUN_DIR/pytest" \
+            -o "cache_dir=$SIM_RUN_DIR/pytest-cache" \
+            --junitxml="$SIM_RUN_DIR/junit.xml"
+          "$SIM_PY" -I - "$SIM_RUN_DIR/junit.xml" <<'PY'
+          import json
+          import sys
+          import xml.etree.ElementTree as ET
+
+          suites = ET.parse(sys.argv[1]).getroot().iter("testsuite")
+          counts = {key: 0 for key in ("tests", "failures", "errors", "skipped")}
+          for suite in suites:
+              for key in counts:
+                  counts[key] += int(suite.get(key, "0"))
+          print("PYTEST_COUNTS " + json.dumps({
+              "collected": counts["tests"],
+              "passed": counts["tests"] - counts["failures"] - counts["errors"] - counts["skipped"],
+              "failed": counts["failures"],
+              "errors": counts["errors"],
+              "skipped": counts["skipped"],
+          }, sort_keys=True))
+          PY
