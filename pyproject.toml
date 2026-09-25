@@ -1,0 +1,25 @@
+[build-system]
+requires = ["setuptools==84.0.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "lob-execution-simulator"
+version = "0.1.0"
+description = "Synthetic single-parent IOC execution with separate market, feed and order states"
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = []
+license = "LicenseRef-Portfolio-Evaluation"
+license-files = ["LICENSE", "THIRD_PARTY_NOTICES.md"]
+
+[project.scripts]
+lob-execution-demo = "lob_sim.demo:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+include = ["lob_lab", "lob_sim"]
+namespaces = false
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-ra"
